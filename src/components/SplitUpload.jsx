@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 const emptyForm = () => ({
   title: '',
@@ -7,11 +7,25 @@ const emptyForm = () => ({
   scheduleText: '',
 })
 
-export default function SplitUpload({ onCreated }) {
+export default function SplitUpload({ onCreated, recommendFill, onRecommendConsumed }) {
   const [form, setForm] = useState(emptyForm)
   const [fileHint, setFileHint] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!recommendFill?.nonce) return
+    const fill = recommendFill
+    queueMicrotask(() => {
+      setForm((f) => ({
+        ...f,
+        title: fill.title?.trim() || f.title,
+        description: fill.description ?? f.description,
+        scheduleText: fill.scheduleText ?? f.scheduleText,
+      }))
+      onRecommendConsumed?.()
+    })
+  }, [recommendFill, onRecommendConsumed])
 
   function update(field, value) {
     setForm((f) => ({ ...f, [field]: value }))
@@ -67,9 +81,6 @@ export default function SplitUpload({ onCreated }) {
   return (
     <section className="panel" aria-labelledby="upload-heading">
       <h2 id="upload-heading">Share a split</h2>
-      <p className="muted small">
-        Describe your program and publish it for others to see. You can also import a JSON file.
-      </p>
 
       <div className="file-row">
         <label className="file-label">

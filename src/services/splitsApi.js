@@ -6,6 +6,7 @@
  *   POST   /splits          -> body: Omit<Split,'id'|'createdAt'> -> { split: Split }
  *   PUT    /splits/:id      -> same body shape as POST -> { split: Split }
  *   DELETE /splits/:id      -> 204
+ *   POST   /recommend       -> body: { focus: 'upper'|'lower'|'core' } -> { title, description, scheduleText, source }
  */
 
 const STORAGE_KEY = 'workoutapp:splits'
@@ -157,4 +158,40 @@ export async function deleteSplit(id) {
     return
   }
   writeLocal(readLocal().filter((s) => String(s.id) !== String(id)))
+}
+
+/**
+ * @param {'upper'|'lower'|'core'} focus
+ * @returns {Promise<{ title: string, description: string, scheduleText: string, source: string }>}
+ */
+export async function requestRecommend(focus) {
+  const base = apiBase()
+  if (!base) {
+    throw new Error(
+      'Add VITE_API_URL to .env and restart Vite to use AI recommendations from your API.',
+    )
+  }
+  const root = base.replace(/\/$/, '')
+  const candidates = [`${root}/recommend`, `${root}/api/recommend`]
+
+  let res
+  for (const url of candidates) {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ focus }),
+    })
+    if (res.ok) break
+    if (res.status !== 404) break
+  }
+  if (!res.ok) {
+    const detail = await errorMessageFromResponse(res)
+    if (res.status === 404) {
+      throw new Error(
+        `${detail} Tried ${candidates.join(' and ')}. Pull the latest server code and restart the API (npm run dev:api), or fix VITE_API_URL so it points at this Node server (not the static Vite/GitHub Pages site).`,
+      )
+    }
+    throw new Error(detail)
+  }
+  return res.json()
 }
