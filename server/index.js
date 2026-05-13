@@ -1,13 +1,8 @@
+import 'dotenv/config'
 import cors from 'cors'
 import express from 'express'
 import { randomUUID } from 'node:crypto'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const DATA_DIR = path.join(__dirname, 'data')
-const DATA_FILE = path.join(DATA_DIR, 'splits.json')
+import * as db from './db.js'
 
 const PORT = Number(process.env.PORT) || 4000
 const defaultOrigins = ['http://localhost:5173', 'http://127.0.0.1:5173']
@@ -27,24 +22,9 @@ function normalizeSplit(raw) {
   }
 }
 
-async function ensureStore() {
-  await mkdir(DATA_DIR, { recursive: true })
-  try {
-    await readFile(DATA_FILE, 'utf8')
-  } catch {
-    await writeFile(DATA_FILE, '[]', 'utf8')
-  }
-}
-
-async function readSplits() {
-  await ensureStore()
-  const raw = await readFile(DATA_FILE, 'utf8')
-  const parsed = JSON.parse(raw)
-  return Array.isArray(parsed) ? parsed : []
-}
-
-async function writeSplits(splits) {
-  await writeFile(DATA_FILE, JSON.stringify(splits, null, 2), 'utf8')
+function dbErrorStatus(err) {
+  if (err && err.code === 11000) return 409
+  return 500
 }
 
 const app = express()
@@ -52,17 +32,14 @@ app.use(express.json({ limit: '256kb' }))
 app.use(
   cors({
     origin: corsOrigins,
-    methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type'],
   }),
 )
 
 app.get('/splits', async (_req, res, next) => {
   try {
-    const list = (await readSplits())
-      .map(normalizeSplit)
-      .filter(Boolean)
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    const list = (await db.findAllSplits()).map(normalizeSplit).filter(Boolean)
     res.json({ splits: list })
   } catch (e) {
     next(e)
@@ -72,7 +49,7 @@ app.get('/splits', async (_req, res, next) => {
 app.get('/splits/:id', async (req, res, next) => {
   try {
     const id = String(req.params.id)
-    const found = (await readSplits()).find((s) => String(s.id) === id)
+    const found = await db.findSplitById(id)
     const split = found ? normalizeSplit(found) : null
     if (!split) {
       res.status(404).json({ error: 'Not found' })
@@ -92,18 +69,40 @@ app.post('/splits', async (req, res, next) => {
       res.status(400).json({ error: 'title is required' })
       return
     }
-    const split = normalizeSplit({
-      id: randomUUID(),
+    const id = randomUUID()
+    const split = await db.insertSplit({
+      id,
       title,
-      authorName: body.authorName,
-      description: body.description,
-      scheduleText: body.scheduleText,
-      createdAt: new Date().toISOString(),
+      authorName: String(body.authorName ?? ''),
+      description: String(body.description ?? ''),
+      scheduleText: String(body.scheduleText ?? ''),
     })
-    const all = await readSplits()
-    all.unshift(split)
-    await writeSplits(all)
-    res.status(201).json({ split })
+    res.status(201).json({ split: normalizeSplit(split) })
+  } catch (e) {
+    next(e)
+  }
+})
+
+app.put('/splits/:id', async (req, res, next) => {
+  try {
+    const id = String(req.params.id)
+    const body = req.body ?? {}
+    const title = String(body.title ?? '').trim()
+    if (!title) {
+      res.status(400).json({ error: 'title is required' })
+      return
+    }
+    const updated = await db.updateSplitById(id, {
+      title,
+      authorName: String(body.authorName ?? ''),
+      description: String(body.description ?? ''),
+      scheduleText: String(body.scheduleText ?? ''),
+    })
+    if (!updated) {
+      res.status(404).json({ error: 'Not found' })
+      return
+    }
+    res.json({ split: normalizeSplit(updated) })
   } catch (e) {
     next(e)
   }
@@ -112,13 +111,11 @@ app.post('/splits', async (req, res, next) => {
 app.delete('/splits/:id', async (req, res, next) => {
   try {
     const id = String(req.params.id)
-    const all = await readSplits()
-    const nextList = all.filter((s) => String(s.id) !== id)
-    if (nextList.length === all.length) {
+    const deleted = await db.deleteSplitById(id)
+    if (!deleted) {
       res.status(404).json({ error: 'Not found' })
       return
     }
-    await writeSplits(nextList)
     res.sendStatus(204)
   } catch (e) {
     next(e)
@@ -127,11 +124,27 @@ app.delete('/splits/:id', async (req, res, next) => {
 
 app.use((err, _req, res, _next) => {
   console.error(err)
-  res.status(500).json({ error: 'Internal server error' })
+  const status = dbErrorStatus(err)
+  if (status === 500) {
+    res.status(500).json({ error: 'Internal server error' })
+    return
+  }
+  res.status(status).json({ error: err.message ?? 'Conflict' })
 })
 
-await ensureStore()
+await db.connectDb()
 app.listen(PORT, () => {
   console.log(`Splits API listening on http://localhost:${PORT}`)
   console.log(`CORS allowed origins: ${corsOrigins.join(', ')}`)
 })
+
+async function shutdown() {
+  try {
+    await db.closeDb()
+  } finally {
+    process.exit(0)
+  }
+}
+
+process.on('SIGINT', shutdown)
+process.on('SIGTERM', shutdown)

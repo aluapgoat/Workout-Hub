@@ -1,9 +1,10 @@
 /**
- * Splits data layer. Set VITE_API_URL (e.g. http://localhost:3000) to use real HTTP.
+ * Splits data layer. With VITE_API_URL set, requests go to your Express API (e.g. MongoDB).
  * Expected API (adjust paths in one place if your server differs):
  *   GET    /splits          -> { splits: Split[] }
  *   GET    /splits/:id      -> { split: Split }
  *   POST   /splits          -> body: Omit<Split,'id'|'createdAt'> -> { split: Split }
+ *   PUT    /splits/:id      -> same body shape as POST -> { split: Split }
  *   DELETE /splits/:id      -> 204
  */
 
@@ -94,6 +95,38 @@ export async function createSplit(payload) {
   all.unshift(split)
   writeLocal(all)
   return split
+}
+
+export async function updateSplit(id, payload) {
+  const body = {
+    title: payload.title,
+    authorName: payload.authorName ?? '',
+    description: payload.description ?? '',
+    scheduleText: payload.scheduleText ?? '',
+  }
+  const base = apiBase()
+  if (base) {
+    const res = await fetch(`${base}/splits/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) throw new Error(`Could not update split (${res.status})`)
+    const data = await res.json()
+    return normalizeSplit(data.split ?? data)
+  }
+  const all = readLocal()
+  const idx = all.findIndex((s) => String(s.id) === String(id))
+  if (idx === -1) throw new Error('Split not found')
+  const merged = normalizeSplit({
+    ...all[idx],
+    ...body,
+    id: all[idx].id,
+    createdAt: all[idx].createdAt,
+  })
+  all[idx] = merged
+  writeLocal(all)
+  return merged
 }
 
 export async function deleteSplit(id) {

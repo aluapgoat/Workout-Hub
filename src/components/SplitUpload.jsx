@@ -68,8 +68,7 @@ export default function SplitUpload({ onCreated }) {
     <section className="panel" aria-labelledby="upload-heading">
       <h2 id="upload-heading">Share a split</h2>
       <p className="muted small">
-        Describe your program. Later, the same fields can be saved by your API
-        and database.
+        Describe your program and publish it for others to see. You can also import a JSON file.
       </p>
 
       <div className="file-row">

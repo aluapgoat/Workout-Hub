@@ -103,8 +103,7 @@ export default function App() {
         <div>
           <h1>Workout Split Hub</h1>
           <p className="muted">
-            Publish training splits! Share like and create! Add <code>VITE_API_URL</code> when your backend
-            is ready.
+            Publish your training splits, share them with a link, and browse what others have posted.
           </p>
         </div>
       </header>

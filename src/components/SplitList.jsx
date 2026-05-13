@@ -14,8 +14,7 @@ export default function SplitList({ splits, loading, error, onOpen, onDelete }) 
   if (!splits.length) {
     return (
       <p className="muted">
-        No splits yet. Publish one from the form on the left, or point{' '}
-        <code>VITE_API_URL</code> at your API once it exists.
+        No splits yet. Publish one using the form on the left (or above on small screens).
       </p>
     )
   }
