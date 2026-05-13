@@ -16,6 +16,19 @@ function setUrlSplitId(id) {
   window.history.replaceState({}, '', `${url.pathname}${url.search}`)
 }
 
+/** Turn generic browser network errors into actionable copy. */
+function friendlyListError(err) {
+  const msg = typeof err?.message === 'string' ? err.message : ''
+  if (/load failed|failed to fetch|networkerror|network request failed/i.test(msg)) {
+    const api = import.meta.env.VITE_API_URL
+    const hint = api
+      ? `Could not reach the API at ${api}. Start the API (npm run dev:api), confirm that URL, set CLIENT_ORIGIN on the server to this site’s origin for CORS, and use https for the API if this page is served over https (mixed content blocks http APIs).`
+      : 'Could not load splits. If you meant to use the API, set VITE_API_URL in .env and restart Vite.'
+    return hint
+  }
+  return msg || 'Could not load splits.'
+}
+
 export default function App() {
   const [splits, setSplits] = useState([])
   const [loading, setLoading] = useState(true)
@@ -29,7 +42,7 @@ export default function App() {
       const list = await splitsApi.listSplits()
       setSplits(list)
     } catch (e) {
-      setListError(e?.message ?? 'Could not load splits.')
+      setListError(friendlyListError(e))
     } finally {
       setLoading(false)
     }
@@ -47,8 +60,8 @@ export default function App() {
       try {
         const split = await splitsApi.getSplit(id)
         if (!cancelled && split) setSelected(split)
-      } catch {
-        if (!cancelled) setListError('Linked split could not be loaded.')
+      } catch (e) {
+        if (!cancelled) setListError(friendlyListError(e))
       }
     })()
     return () => {

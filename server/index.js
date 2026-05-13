@@ -5,7 +5,12 @@ import { randomUUID } from 'node:crypto'
 import * as db from './db.js'
 
 const PORT = Number(process.env.PORT) || 4000
-const defaultOrigins = ['http://localhost:5173', 'http://127.0.0.1:5173']
+const defaultOrigins = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:4173',
+  'http://127.0.0.1:4173',
+]
 const corsOrigins = process.env.CLIENT_ORIGIN
   ? process.env.CLIENT_ORIGIN.split(',').map((s) => s.trim())
   : defaultOrigins
