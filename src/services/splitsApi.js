@@ -15,6 +15,23 @@ function apiBase() {
   return url && String(url).replace(/\/$/, '')
 }
 
+/** Read `{ error: "..." }` from API error responses when present. */
+async function errorMessageFromResponse(res) {
+  const fallback = `Request failed (${res.status})`
+  try {
+    const ct = res.headers.get('content-type') || ''
+    if (ct.includes('application/json')) {
+      const data = await res.json()
+      if (data && typeof data.error === 'string' && data.error.trim()) {
+        return data.error.trim()
+      }
+    }
+  } catch {
+    // non-JSON body or parse error
+  }
+  return fallback
+}
+
 function readLocal() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
@@ -46,7 +63,7 @@ export async function listSplits() {
   const base = apiBase()
   if (base) {
     const res = await fetch(`${base}/splits`)
-    if (!res.ok) throw new Error(`Failed to load splits (${res.status})`)
+    if (!res.ok) throw new Error(await errorMessageFromResponse(res))
     const data = await res.json()
     const list = Array.isArray(data.splits) ? data.splits : data
     return list.map(normalizeSplit).filter(Boolean)
@@ -60,7 +77,7 @@ export async function getSplit(id) {
   const base = apiBase()
   if (base) {
     const res = await fetch(`${base}/splits/${encodeURIComponent(id)}`)
-    if (!res.ok) throw new Error(`Split not found (${res.status})`)
+    if (!res.ok) throw new Error(await errorMessageFromResponse(res))
     const data = await res.json()
     return normalizeSplit(data.split ?? data)
   }
@@ -82,7 +99,7 @@ export async function createSplit(payload) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
-    if (!res.ok) throw new Error(`Could not publish split (${res.status})`)
+    if (!res.ok) throw new Error(await errorMessageFromResponse(res))
     const data = await res.json()
     return normalizeSplit(data.split ?? data)
   }
@@ -111,7 +128,7 @@ export async function updateSplit(id, payload) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
-    if (!res.ok) throw new Error(`Could not update split (${res.status})`)
+    if (!res.ok) throw new Error(await errorMessageFromResponse(res))
     const data = await res.json()
     return normalizeSplit(data.split ?? data)
   }
@@ -136,7 +153,7 @@ export async function deleteSplit(id) {
       method: 'DELETE',
     })
     if (!res.ok && res.status !== 204)
-      throw new Error(`Could not delete (${res.status})`)
+      throw new Error(await errorMessageFromResponse(res))
     return
   }
   writeLocal(readLocal().filter((s) => String(s.id) !== String(id)))
