@@ -9,6 +9,9 @@ lerna-debug.log*
 
 node_modules
 dist
+
+# API file store (local data)
+server/data/splits.json
 dist-ssr
 *.local
 
