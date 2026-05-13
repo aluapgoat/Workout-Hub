@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import SplitUpload from './components/SplitUpload.jsx'
 import SplitList from './components/SplitList.jsx'
 import SplitDetail from './components/SplitDetail.jsx'
+import RecommendedPanel from './components/RecommendedPanel.jsx'
 import * as splitsApi from './services/splitsApi.js'
 import './App.css'
 
@@ -35,6 +36,17 @@ export default function App() {
   const [listError, setListError] = useState('')
   const [selected, setSelected] = useState(null)
   const [copyDone, setCopyDone] = useState(false)
+  const [feedTab, setFeedTab] = useState('community')
+  const [recommendFill, setRecommendFill] = useState(null)
+  const [recommendVisitKey, setRecommendVisitKey] = useState(0)
+
+  const clearRecommendFill = useCallback(() => {
+    setRecommendFill(null)
+  }, [])
+
+  const applyRecommendToForm = useCallback((payload) => {
+    setRecommendFill({ nonce: Date.now(), ...payload })
+  }, [])
 
   const refresh = useCallback(async () => {
     setListError('')
@@ -49,7 +61,9 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    refresh()
+    queueMicrotask(() => {
+      refresh()
+    })
   }, [refresh])
 
   useEffect(() => {
@@ -116,22 +130,67 @@ export default function App() {
         <div>
           <h1>Workout Split Hub</h1>
           <p className="muted">
-            Publish your training splits, share them with a link, and browse what others have posted.
+            Publish your training splits, share them with a link, and browse what others have posted. 
+            Try recommended tab if you don't know where to start!
           </p>
         </div>
       </header>
 
       <main className="app__grid">
-        <SplitUpload onCreated={handleCreated} />
+        <SplitUpload
+          onCreated={handleCreated}
+          recommendFill={recommendFill}
+          onRecommendConsumed={clearRecommendFill}
+        />
         <section className="panel" aria-labelledby="feed-heading">
-          <h2 id="feed-heading">Community</h2>
-          <SplitList
-            splits={splits}
-            loading={loading}
-            error={listError}
-            onOpen={openSplit}
-            onDelete={handleDelete}
-          />
+          <div className="feed-tabs" role="tablist" aria-label="Community or recommendations">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={feedTab === 'community'}
+              aria-controls="feed-panel"
+              id="tab-community"
+              className={`feed-tab${feedTab === 'community' ? ' feed-tab--active' : ''}`}
+              onClick={() => setFeedTab('community')}
+            >
+              Community
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={feedTab === 'recommended'}
+              aria-controls="feed-panel"
+              id="tab-recommended"
+              className={`feed-tab${feedTab === 'recommended' ? ' feed-tab--active' : ''}`}
+              onClick={() => {
+                setFeedTab('recommended')
+                setRecommendVisitKey((k) => k + 1)
+              }}
+            >
+              Recommended
+            </button>
+          </div>
+
+          <h2 id="feed-heading" className="visually-hidden">
+            {feedTab === 'community' ? 'Community' : 'Recommended'}
+          </h2>
+
+          <div id="feed-panel" role="tabpanel" aria-labelledby={feedTab === 'community' ? 'tab-community' : 'tab-recommended'}>
+            {feedTab === 'community' ? (
+              <SplitList
+                splits={splits}
+                loading={loading}
+                error={listError}
+                onOpen={openSplit}
+                onDelete={handleDelete}
+              />
+            ) : (
+              <RecommendedPanel
+                visitKey={recommendVisitKey}
+                onApplyToForm={applyRecommendToForm}
+              />
+            )}
+          </div>
         </section>
       </main>
 
